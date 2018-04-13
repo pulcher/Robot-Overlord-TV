@@ -24,18 +24,18 @@
             <ColumnDefinition Width="200"/>
         </Grid.ColumnDefinitions>
 
-        <!--<Canvas Grid.Row="0" Grid.RowSpan="2" x:Name="preview" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-            <CaptureElement x:Name="previewElement" Stretch="UniformToFill"/>
-        </Canvas>-->
-        <CaptureElement Grid.Row="0" Grid.RowSpan="2" x:Name="previewElement" Stretch="UniformToFill"/>
+        <CaptureElement Grid.Row="0" Grid.RowSpan="2" x:Name="PreviewElement" Stretch="UniformToFill"/>
+        <!--<Border Grid.Row="0" Grid.RowSpan="2" BorderBrush="Red" BorderThickness="3">-->
+            <Canvas  x:Name="PreviewVisualizer" FlowDirection="RightToLeft"/>
+        <!--</Border>-->
         
-        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="pageYes" Text="YES" Style="{StaticResource HeaderTextBlockStyle}" 
+        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="PageYes" Text="YES" Style="{StaticResource HeaderTextBlockStyle}" 
                         IsHitTestVisible="false" TextWrapping="NoWrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
 
-        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="pageNo" Text="NO" Style="{StaticResource HeaderTextBlockStyle}" 
+        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PageNo" Text="NO" Style="{StaticResource HeaderTextBlockStyle}" 
                         IsHitTestVisible="false" TextWrapping="NoWrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
 
-        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" x:Name="status" Text="BLAH" Style="{StaticResource BodyTextBlockStyle}" 
+        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" x:Name="Status" Text="BLAH" Style="{StaticResource BodyTextBlockStyle}" 
                         IsHitTestVisible="false" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
     </Grid>
 </Page>

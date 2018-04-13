@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Roltv.Controls;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -43,6 +44,20 @@ namespace Roltv
             Application.Current.Suspending += ApplicationSuspending;
 
             InitializeCameraAsync();
+            InitializeFaceTracking();
+        }
+
+        private async void InitializeFaceTracking()
+        {
+            if (faceTracker == null)
+            {
+                faceTracker = await FaceTracker.CreateAsync();
+
+                var timerInterval = TimeSpan.FromMilliseconds(1000 / framesPerSecond); // gets us seconds/frame
+                frameProcessingTimer = ThreadPoolTimer.CreatePeriodicTimer(new TimerElapsedHandler(ProcessVideoFrame), timerInterval);
+
+                UpdateStatus("Face detection initiated...");
+            }
         }
 
         private async void InitializeCameraAsync()
@@ -57,8 +72,8 @@ namespace Roltv
 
                     mediaCapture.Failed += new MediaCaptureFailedEventHandler(MediaCaptureFailed);
                      
-                    previewElement.Source = mediaCapture;
-                    previewElement.FlowDirection = FlowDirection.RightToLeft;
+                    PreviewElement.Source = mediaCapture;
+                    PreviewElement.FlowDirection = FlowDirection.RightToLeft;
 
                     videoProperties = mediaCapture.VideoDeviceController
                         .GetMediaStreamProperties(MediaStreamType.VideoPreview) as VideoEncodingProperties;
@@ -66,11 +81,6 @@ namespace Roltv
                     //mediaCapture.SetPreviewRotation(VideoRotation.Clockwise180Degrees);
 
                     await mediaCapture.StartPreviewAsync();
-
-                    var test = 1000 / framesPerSecond;
-
-                    var timerInterval = TimeSpan.FromMilliseconds(1000 / framesPerSecond); // gets us seconds/frame
-                    frameProcessingTimer = ThreadPoolTimer.CreatePeriodicTimer(new TimerElapsedHandler(ProcessVideoFrame), timerInterval);
 
                     UpdateStatus("Camera found.  Initialized for video recording", 1000);
                 }
@@ -111,18 +121,30 @@ namespace Roltv
 
                 using (var previewFrame = new VideoFrame(inputPixelFormat, (int)videoProperties.Width, (int)videoProperties.Height))
                 {
-                    var test = "";
-
                     await mediaCapture.GetPreviewFrameAsync(previewFrame);
 
                     if (FaceTracker.IsBitmapPixelFormatSupported(previewFrame.SoftwareBitmap.BitmapPixelFormat))
                     {
                         faces = await faceTracker.ProcessNextFrameAsync(previewFrame);
+
+                        if (faces.Any())
+                        {
+                            var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
+                            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                            {
+                                ShowFaceTracking(faces, previewFrameSize);
+                            });
+                        }
+
+                        var firstFace = faces.FirstOrDefault();
+
+                        var test = faces.Count();
                     }
                 }
             }
             catch (Exception)
             {
+                // face detection failed for some reason.
             }
             finally
             {
@@ -130,29 +152,60 @@ namespace Roltv
             }
         }
 
+        private void ShowFaceTracking(IEnumerable<DetectedFace> faces, Size framePixelSize)
+        {
+            // Clear off all the junk
+            PreviewVisualizer.Children.Clear();
+
+            var actualWidth = PreviewElement.ActualWidth;
+            var actualHeight = PreviewElement.ActualHeight;
+
+            if (mediaCapture.CameraStreamState == Windows.Media.Devices.CameraStreamState.Streaming
+                && faces.Any() && actualHeight != 0 && actualWidth !=0)
+            {
+                var widthScale = framePixelSize.Width / actualWidth;
+                var heightScale = framePixelSize.Height / actualHeight;
+
+                foreach (var face in faces)
+                {
+                    var faceBorder = new RealTimeFaceIdentificationBorder();
+                    PreviewVisualizer.Children.Add(faceBorder);
+
+                    faceBorder.ShowFaceRectangle((uint)(face.FaceBox.X / widthScale), (uint)(face.FaceBox.Y / heightScale),
+                        (uint)(face.FaceBox.Width / widthScale), (uint)(face.FaceBox.Height / heightScale));
+
+                    PreviewVisualizer.Children.Add(new TextBlock
+                    {
+                        Text = string.Format("Coverage: {0:0}%", 100 * ((double)face.FaceBox.Height / this.videoProperties.Height)),
+                        Margin = new Thickness((uint)(face.FaceBox.X / widthScale), (uint)(face.FaceBox.Y / heightScale), 0, 0)
+                    });
+                }
+            }
+        }
+
         private async void MediaCaptureFailed(MediaCapture sender, MediaCaptureFailedEventArgs currentFailure)
         {
-            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
                 try
                 {
-                    status.Text = "MediaCaptureFailed: " + currentFailure.Message;
+                    Status.Text = "MediaCaptureFailed: " + currentFailure.Message;
                 }
                 catch (Exception)
                 {
                 }
                 finally
                 {
-                    status.Text += "\nCheck if camera is diconnected. Try re-launching the app";
+                    Status.Text += "\nCheck if camera is diconnected. Try re-launching the app";
                 }
             });
         }
 
         private async void UpdateStatus(string message, int delay = 0)
         {
-            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                 {
-                    status.Text = message;
+                    Status.Text = message;
                     Task.Delay(delay);
                 });
         }
@@ -184,7 +237,7 @@ namespace Roltv
 
                 await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                 {
-                    previewElement.Source = null;
+                    PreviewElement.Source = null;
                     //if (displayRequest != null)
                     //{
                     //    displayRequest.RequestRelease();

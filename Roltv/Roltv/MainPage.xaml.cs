@@ -1,4 +1,6 @@
-﻿using Roltv.Controls;
+﻿using Microsoft.ProjectOxford.Face;
+using Microsoft.ProjectOxford.Face.Contract;
+using Roltv.Controls;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,20 +10,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.Foundation;
-using Windows.Foundation.Collections;
 using Windows.Graphics.Imaging;
 using Windows.Media;
 using Windows.Media.Capture;
 using Windows.Media.FaceAnalysis;
 using Windows.Media.MediaProperties;
+using Windows.Storage.Streams;
 using Windows.System.Threading;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
 namespace Roltv
@@ -30,11 +28,17 @@ namespace Roltv
     {
         private const int framesPerSecond = 10; // current limit on the plan for processing images
 
+        private IFaceServiceClient faceServiceClient;
         private MediaCapture mediaCapture;
         private ThreadPoolTimer frameProcessingTimer;
         private FaceTracker faceTracker;
         private SemaphoreSlim frameProcessingSimaphore = new SemaphoreSlim(1);
         private VideoEncodingProperties videoProperties;
+
+        // probably these need to be someplace different
+        Face[] globalFaces;
+        String[] facesDescription;
+        private IEnumerable<FaceAttributeType> requiredFaceAttributes;
 
         public MainPage()
         {
@@ -45,6 +49,12 @@ namespace Roltv
 
             InitializeCameraAsync();
             InitializeFaceTracking();
+            InitializeFaceApi();
+        }
+
+        private void InitializeFaceApi()
+        {
+            faceServiceClient = new FaceServiceClient("64424d4e9d114614a4c46fe258b272a7", "https://southcentralus.api.cognitive.microsoft.com/face/v1.0");
         }
 
         private async void InitializeFaceTracking()
@@ -129,6 +139,15 @@ namespace Roltv
 
                         if (faces.Any())
                         {
+                            var captureStream = new MemoryStream();
+                            await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreatePng(), captureStream.AsRandomAccessStream());
+                            captureStream.AsRandomAccessStream().Seek(0);
+
+                            //var imageStream = await GetImageAsStream(previewFrame.SoftwareBitmap, Guid.NewGuid());
+
+                            // ask the face api what it sees
+                            var globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
+
                             var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
                             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                             {
@@ -142,14 +161,50 @@ namespace Roltv
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                var test = ex;
+
+                
                 // face detection failed for some reason.
             }
             finally
             {
                 frameProcessingSimaphore.Release();
             }
+        }
+
+        private async Task<MemoryStream> GetImageAsStream(SoftwareBitmap softwareBitmap, Guid guid)
+        {
+            MemoryStream theStream;
+            byte[] array = null;
+
+            var memoryStream = new InMemoryRandomAccessStream();
+
+            // Get a way to get a hold of the image bits
+                var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.BmpEncoderId, memoryStream);
+            
+                encoder.SetSoftwareBitmap(softwareBitmap);
+
+                try
+                {
+                    await encoder.FlushAsync();
+                }
+                catch( Exception ex )
+                {
+                    return new MemoryStream();
+                }
+
+                // make the data array large enough to hold on to the bits
+                array = new byte[memoryStream.Size];
+
+                // Copy all the bits to the array
+                await memoryStream.ReadAsync(array.AsBuffer(), (uint)memoryStream.Size, InputStreamOptions.None);
+
+                // Create the stream using the bits in the array
+                theStream = new MemoryStream(array);
+            
+            return theStream;
         }
 
         private void ShowFaceTracking(IEnumerable<DetectedFace> faces, Size framePixelSize)

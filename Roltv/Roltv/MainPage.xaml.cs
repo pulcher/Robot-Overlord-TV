@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
@@ -36,9 +37,10 @@ namespace Roltv
         private VideoEncodingProperties videoProperties;
 
         // probably these need to be someplace different
-        Face[] globalFaces;
-        String[] facesDescription;
+        private Face[] globalFaces;
+        private String[] facesDescription;
         private IEnumerable<FaceAttributeType> requiredFaceAttributes;
+        private PersonGroup[] personGroups;
 
         public MainPage()
         {
@@ -52,9 +54,38 @@ namespace Roltv
             InitializeFaceApi();
         }
 
-        private void InitializeFaceApi()
+        private async void InitializeFaceApi()
         {
             faceServiceClient = new FaceServiceClient("64424d4e9d114614a4c46fe258b272a7", "https://southcentralus.api.cognitive.microsoft.com/face/v1.0");
+
+            // See https://docs.microsoft.com/en-us/azure/cognitive-services/face/glossary#a for the current list of supported options.
+            requiredFaceAttributes = new FaceAttributeType[]
+            {
+                FaceAttributeType.Age,
+                FaceAttributeType.Gender,
+                FaceAttributeType.HeadPose,
+                FaceAttributeType.Smile,
+                FaceAttributeType.FacialHair,
+                FaceAttributeType.Glasses,
+                FaceAttributeType.Emotion,
+                FaceAttributeType.Hair,
+                FaceAttributeType.Makeup,
+                FaceAttributeType.Occlusion,
+                FaceAttributeType.Accessories,
+                FaceAttributeType.Blur,
+                FaceAttributeType.Exposure,
+                FaceAttributeType.Noise
+            };
+
+            personGroups = await faceServiceClient.ListPersonGroupsAsync();
+
+            var test = await faceServiceClient.ListPersonsInPersonGroupAsync(personGroups[0].PersonGroupId);
+
+            var test3 = test[0].PersistedFaceIds;
+
+            var test4 = await faceServiceClient.GetPersonFaceInPersonGroupAsync(personGroups[0].PersonGroupId, test[0].PersonId, test[0].PersistedFaceIds[0]);
+
+            var test2 = 0;
         }
 
         private async void InitializeFaceTracking()
@@ -143,15 +174,16 @@ namespace Roltv
                             await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreatePng(), captureStream.AsRandomAccessStream());
                             captureStream.AsRandomAccessStream().Seek(0);
 
-                            //var imageStream = await GetImageAsStream(previewFrame.SoftwareBitmap, Guid.NewGuid());
-
                             // ask the face api what it sees
+                            // See: https://docs.microsoft.com/en-us/azure/cognitive-services/face/face-api-how-to-topics/howtodetectfacesinimage
                             var globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
 
+                            
                             var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
                             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                             {
                                 ShowFaceTracking(faces, previewFrameSize);
+                                ShowIdentificationiStatus(globalFaces);
                             });
                         }
 
@@ -172,6 +204,37 @@ namespace Roltv
             {
                 frameProcessingSimaphore.Release();
             }
+        }
+
+        private async void ShowIdentificationiStatus(Face[] globalFaces)
+        {
+            var message = new StringBuilder();
+
+            message.Append($"{globalFaces.Length} faces seen.  Recognizing the following: ");
+
+            var foundFaces = globalFaces.Select(x => x.FaceId).ToArray();
+
+            foreach (var group in personGroups)
+            {
+                var results = await faceServiceClient.IdentifyAsync(group.PersonGroupId, foundFaces);
+
+                foreach (var processedResult in results)
+                {
+                    if (processedResult.Candidates.Length > 0)
+                    {
+                        var person = await faceServiceClient
+                            .GetPersonInPersonGroupAsync(group.PersonGroupId, processedResult.Candidates[0].PersonId);
+
+                        message.Append($"({group.Name}){person.Name}");
+                        message.Append(", ");
+                    }
+                }
+            }
+
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                InPicture.Text = message.ToString();
+            });
         }
 
         private async Task<MemoryStream> GetImageAsStream(SoftwareBitmap softwareBitmap, Guid guid)
@@ -214,6 +277,9 @@ namespace Roltv
 
             var actualWidth = PreviewElement.ActualWidth;
             var actualHeight = PreviewElement.ActualHeight;
+
+            if (mediaCapture == null)
+                return;
 
             if (mediaCapture.CameraStreamState == Windows.Media.Devices.CameraStreamState.Streaming
                 && faces.Any() && actualHeight != 0 && actualWidth !=0)

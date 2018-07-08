@@ -214,19 +214,23 @@ namespace Roltv
 
             var foundFaces = globalFaces.Select(x => x.FaceId).ToArray();
 
-            foreach (var group in personGroups)
+            if (foundFaces.Any())
             {
-                var results = await faceServiceClient.IdentifyAsync(group.PersonGroupId, foundFaces);
 
-                foreach (var processedResult in results)
+                foreach (var group in personGroups)
                 {
-                    if (processedResult.Candidates.Length > 0)
-                    {
-                        var person = await faceServiceClient
-                            .GetPersonInPersonGroupAsync(group.PersonGroupId, processedResult.Candidates[0].PersonId);
+                    var results = await faceServiceClient.IdentifyAsync(group.PersonGroupId, foundFaces);
 
-                        message.Append($"({group.Name}){person.Name}");
-                        message.Append(", ");
+                    foreach (var processedResult in results)
+                    {
+                        if (processedResult.Candidates.Length > 0)
+                        {
+                            var person = await faceServiceClient
+                                .GetPersonInPersonGroupAsync(group.PersonGroupId, processedResult.Candidates[0].PersonId);
+
+                            message.Append($"({group.Name}){person.Name}");
+                            message.Append(", ");
+                        }
                     }
                 }
             }

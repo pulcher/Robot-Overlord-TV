@@ -34,11 +34,16 @@
 
         <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PageNo" Text="NO" Style="{StaticResource HeaderTextBlockStyle}" 
                         IsHitTestVisible="false" TextWrapping="NoWrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TrainMe" Text="Train" Style="{StaticResource HeaderTextBlockStyle}" 
+                        IsHitTestVisible="false" TextWrapping="NoWrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
+
+        <StackPanel Grid.Row="2" Grid.Column="0">
+        <TextBlock x:Name="InPicture" Text="I spy with my camera eye...." Style="{StaticResource BodyTextBlockStyle}" 
+                        IsHitTestVisible="false" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="80"/>
         
-        <TextBlock Grid.Row="2" Grid.Column="0" x:Name="InPicture" Text="I spy with my camera eye...." Style="{StaticResource BodyTextBlockStyle}" 
-                        IsHitTestVisible="false" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
-        
-        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="Status" Text="BLAH" Style="{StaticResource BodyTextBlockStyle}" 
-                        IsHitTestVisible="false" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="61"/>
+        <TextBlock x:Name="Status" Text="BLAH" Style="{StaticResource BodyTextBlockStyle}" 
+                        IsHitTestVisible="false" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Height="51"/>
+        </StackPanel>
     </Grid>
 </Page>

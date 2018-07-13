@@ -240,7 +240,7 @@ namespace Roltv
         {
             var message = new StringBuilder();
 
-            message.Append($"{globalFaces.Length} faces seen.  Recognizing the following: ");
+            message.Append($"Number of faces visible: {globalFaces.Length}.  Recognizing the following: ");
 
             var foundFaces = globalFaces.Select(x => x.FaceId).ToArray();
 

@@ -22,6 +22,7 @@ using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
+using Windows.Media.SpeechSynthesis;
 
 namespace Roltv
 {
@@ -35,12 +36,16 @@ namespace Roltv
         private FaceTracker faceTracker;
         private SemaphoreSlim frameProcessingSimaphore = new SemaphoreSlim(1);
         private VideoEncodingProperties videoProperties;
+        private SpeechSynthesizer synth = new SpeechSynthesizer();
 
         // probably these need to be someplace different
         private Face[] globalFaces;
         private String[] facesDescription;
         private IEnumerable<FaceAttributeType> requiredFaceAttributes;
         private PersonGroup[] personGroups;
+
+        // detect whether a face is there are not for other systems to kick in.
+        private bool facesExistInFrame;  // probably should make this a delagate for when faces show and not.
 
         public MainPage()
         {
@@ -170,24 +175,49 @@ namespace Roltv
 
                         if (faces.Any())
                         {
-                            var captureStream = new MemoryStream();
-                            await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreatePng(), captureStream.AsRandomAccessStream());
-                            captureStream.AsRandomAccessStream().Seek(0);
+                            if (!facesExistInFrame)
+                            {
+                                facesExistInFrame = true;
 
-                            // ask the face api what it sees
-                            // See: https://docs.microsoft.com/en-us/azure/cognitive-services/face/face-api-how-to-topics/howtodetectfacesinimage
-                            var globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
+                                await ShowMessage("Will you help me?  If so, make sure I can see you face and click \"Yse\"");
+                            }
 
-                            
-                            var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
+                            if (faces.Count() > 1)
+                            {
+                                // sound an error and ask that only one person be in the picture at a time.
+                            }
+                            else
+                            {
+                                var captureStream = new MemoryStream();
+                                await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreatePng(), captureStream.AsRandomAccessStream());
+                                captureStream.AsRandomAccessStream().Seek(0);
+
+                                // ask the face api what it sees
+                                // See: https://docs.microsoft.com/en-us/azure/cognitive-services/face/face-api-how-to-topics/howtodetectfacesinimage
+                                var globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
+
+
+                                var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
+                                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                                {
+                                    ShowFaceTracking(faces, previewFrameSize);
+                                    ShowIdentificationiStatus(globalFaces);
+                                });
+                            }
+
+                            var firstFace = faces.FirstOrDefault();
+                        }
+                        else
+                        {
+                            facesExistInFrame = false;
+                            // reset the stuff because there are no faces to analyze.
+
+                            await ShowMessage(String.Empty);
                             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                             {
-                                ShowFaceTracking(faces, previewFrameSize);
-                                ShowIdentificationiStatus(globalFaces);
+                                ShowFaceTracking(faces, new Size());
                             });
                         }
-
-                        var firstFace = faces.FirstOrDefault();
 
                         var test = faces.Count();
                     }
@@ -235,9 +265,15 @@ namespace Roltv
                 }
             }
 
+            await ShowMessage(message.ToString());
+        }
+
+        private async Task ShowMessage(string message, int delay = 0)
+        {
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
-                InPicture.Text = message.ToString();
+                InPicture.Text = message;
+                Task.Delay(delay);
             });
         }
 

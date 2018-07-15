@@ -173,21 +173,55 @@ namespace Roltv
                     {
                         faces = await faceTracker.ProcessNextFrameAsync(previewFrame);
 
+                        if (!facesExistInFrame)
+                        {
+                            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                            {
+                                // Enable the Train feature and disable the other buttons
+                                PageYes.Visibility = Visibility.Collapsed;
+                                PageNo.Visibility = Visibility.Collapsed;
+                                TrainMe.Visibility = Visibility.Visible;
+                            });
+                        }
+
                         if (faces.Any())
                         {
                             if (!facesExistInFrame)
                             {
                                 facesExistInFrame = true;
 
-                                await ShowMessage("Will you help me?  If so, make sure I can see you face and click \"Yse\"");
+                                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                                {
+                                    // Enable the Yes/No buttons.  Disable the Train Button
+                                    PageYes.Visibility = Visibility.Visible;
+                                    PageNo.Visibility = Visibility.Visible;
+                                    TrainMe.Visibility = Visibility.Collapsed;
+                                });
+
+                                await ShowMessage("Will you help me?  If so, make sure I can see you face and click \"Yse\"", 1);
                             }
 
                             if (faces.Count() > 1)
                             {
-                                // sound an error and ask that only one person be in the picture at a time.
+                                await ShowMessage("Can only identify when multiple faces are visible.");
+
+                                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                                {
+                                    // Disable the Yes/No buttons.
+                                    PageYes.Visibility = Visibility.Collapsed;
+                                    PageNo.Visibility = Visibility.Collapsed;
+                                });
                             }
                             else
                             {
+                                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                                {
+                                    // Enable the Yes/No Buttons
+                                    PageYes.Visibility = Visibility.Visible;
+                                    PageNo.Visibility = Visibility.Visible;
+                                    TrainMe.Visibility = Visibility.Collapsed;
+                                });
+
                                 var captureStream = new MemoryStream();
                                 await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreatePng(), captureStream.AsRandomAccessStream());
                                 captureStream.AsRandomAccessStream().Seek(0);
@@ -196,14 +230,14 @@ namespace Roltv
                                 // See: https://docs.microsoft.com/en-us/azure/cognitive-services/face/face-api-how-to-topics/howtodetectfacesinimage
                                 var globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
 
-
-                                var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
-                                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                                {
-                                    ShowFaceTracking(faces, previewFrameSize);
-                                    ShowIdentificationiStatus(globalFaces);
-                                });
                             }
+
+                            var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
+                            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                            {
+                                ShowFaceTracking(faces, previewFrameSize);
+                                ShowIdentificationiStatus(globalFaces);
+                            });
 
                             var firstFace = faces.FirstOrDefault();
                         }
@@ -238,6 +272,9 @@ namespace Roltv
 
         private async void ShowIdentificationiStatus(Face[] globalFaces)
         {
+            if (globalFaces == null)
+                return;
+
             var message = new StringBuilder();
 
             message.Append($"Number of faces visible: {globalFaces.Length}.  Recognizing the following: ");

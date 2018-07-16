@@ -23,13 +23,17 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 using Windows.Media.SpeechSynthesis;
+using ServiceHelpers;
+using Windows.Storage;
 
 namespace Roltv
 {
     public sealed partial class MainPage : Page
     {
         private const int framesPerSecond = 10; // current limit on the plan for processing images
+        private readonly int NumberOfNeededImages = 3;  // numver of photos to take.
 
+        private Random random = new Random();
         private IFaceServiceClient faceServiceClient;
         private MediaCapture mediaCapture;
         private ThreadPoolTimer frameProcessingTimer;
@@ -42,10 +46,14 @@ namespace Roltv
         private Face[] globalFaces;
         private String[] facesDescription;
         private IEnumerable<FaceAttributeType> requiredFaceAttributes;
-        private PersonGroup[] personGroups;
+        private IList<PersonGroup> personGroups;
+        private PersonGroup HeroOrVillanPersonGroup;
 
         // detect whether a face is there are not for other systems to kick in.
         private bool facesExistInFrame;  // probably should make this a delagate for when faces show and not.
+
+        private StorageFolder imageFolder;
+        private int imageNeededCount;
 
         public MainPage()
         {
@@ -57,6 +65,10 @@ namespace Roltv
             InitializeCameraAsync();
             InitializeFaceTracking();
             InitializeFaceApi();
+
+            PageYes.Click += PageYes_Click;
+            PageNo.Click += PageNo_Click;
+            TrainMe.Click += TrainMe_Click;
         }
 
         private async void InitializeFaceApi()
@@ -82,15 +94,40 @@ namespace Roltv
                 FaceAttributeType.Noise
             };
 
-            personGroups = await faceServiceClient.ListPersonGroupsAsync();
+            personGroups = (await faceServiceClient.ListPersonGroupsAsync()).ToList();
 
-            var test = await faceServiceClient.ListPersonsInPersonGroupAsync(personGroups[0].PersonGroupId);
+            HeroOrVillanPersonGroup = await EnsurePersonGroupExits(personGroups);
+
+            var test = await faceServiceClient.ListPersonsInPersonGroupAsync(HeroOrVillanPersonGroup.PersonGroupId);
 
             var test3 = test[0].PersistedFaceIds;
 
-            var test4 = await faceServiceClient.GetPersonFaceInPersonGroupAsync(personGroups[0].PersonGroupId, test[0].PersonId, test[0].PersistedFaceIds[0]);
+            // var test4 = await faceServiceClient.GetPersonFaceInPersonGroupAsync(personGroups[0].PersonGroupId, test[0].PersonId, test[0].PersistedFaceIds[0]);
 
             var test2 = 0;
+        }
+
+        private async Task<PersonGroup> EnsurePersonGroupExits(IList<PersonGroup> personGroups)
+        {
+            var newGroupId = Guid.NewGuid();
+            var foundGroup = personGroups.Where(x => x.Name == GroupData.HeroVillanGroupName).FirstOrDefault();
+
+            if(personGroups.Count() == 0 || foundGroup == null)
+            { 
+
+                //create new PersonGroup
+                await faceServiceClient.CreatePersonGroupAsync(newGroupId.ToString(), GroupData.HeroVillanGroupName);
+
+                foundGroup = new PersonGroup
+                {
+                    Name = GroupData.HeroVillanGroupName,
+                    PersonGroupId = newGroupId.ToString()
+                };
+
+                personGroups.Add(foundGroup);
+            }
+
+            return foundGroup;
         }
 
         private async void InitializeFaceTracking()
@@ -165,6 +202,8 @@ namespace Roltv
 
                 const BitmapPixelFormat inputPixelFormat = BitmapPixelFormat.Nv12;
 
+                Face[] globalFaces = null;
+
                 using (var previewFrame = new VideoFrame(inputPixelFormat, (int)videoProperties.Width, (int)videoProperties.Height))
                 {
                     await mediaCapture.GetPreviewFrameAsync(previewFrame);
@@ -228,8 +267,19 @@ namespace Roltv
 
                                 // ask the face api what it sees
                                 // See: https://docs.microsoft.com/en-us/azure/cognitive-services/face/face-api-how-to-topics/howtodetectfacesinimage
-                                var globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
+                                globalFaces = await faceServiceClient.DetectAsync(captureStream, true, true, requiredFaceAttributes);
 
+                                if (random.Next(3) == 0 && imageNeededCount > 0)
+                                {
+                                    imageNeededCount--;
+                                    SavePicture(mediaCapture);
+
+                                    if (imageNeededCount == 0)
+                                    {
+                                        await ShowMessage("Ok, you have been recognized...", 1000);
+                                        AddToFaceIdList();
+                                    }
+                                };
                             }
 
                             var previewFrameSize = new Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
@@ -268,6 +318,35 @@ namespace Roltv
             {
                 frameProcessingSimaphore.Release();
             }
+        }
+
+        private async void AddToFaceIdList()
+        {
+            string name = imageFolder.DisplayName;
+
+            var person = await faceServiceClient.CreatePersonAsync(HeroOrVillanPersonGroup.PersonGroupId, name);
+
+            var imageFiles = await imageFolder.GetFilesAsync();
+            foreach (var imageFile in imageFiles)
+            {
+                using (var s = await imageFile.OpenReadAsync())
+                {
+                    // Detect faces in the image and add to Anna
+                    await faceServiceClient.AddPersonFaceInPersonGroupAsync(
+                        HeroOrVillanPersonGroup.PersonGroupId, person.PersonId, imageStream: s.AsStream(), userData: name);
+                }
+            }
+        }
+
+        private async void SavePicture(MediaCapture media)
+        {
+            if (imageFolder == null)
+                return;
+
+            var photoFile = await imageFolder.CreateFileAsync("capture.png", CreationCollisionOption.GenerateUniqueName);
+            var imageProperties = ImageEncodingProperties.CreateJpeg();
+
+            await mediaCapture.CapturePhotoToStorageFileAsync(imageProperties, photoFile);
         }
 
         private async void ShowIdentificationiStatus(Face[] globalFaces)
@@ -428,24 +507,116 @@ namespace Roltv
         {
             if (mediaCapture != null)
             {
-                //if (isPreviewing)
-                //{
-                //    await mediaCapture.StopPreviewAsync();
-                //}
-
                 await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                 {
                     PreviewElement.Source = null;
-                    //if (displayRequest != null)
-                    //{
-                    //    displayRequest.RequestRelease();
-                    //}
 
                     mediaCapture.Dispose();
                     mediaCapture = null;
                 });
             }
 
+        }
+
+        private async void PageYes_Click(object sender, RoutedEventArgs e)
+        {
+            // Pick category: Hero or Villian
+            var possibleNames = PickHeroOrVillanNamePool();
+
+            // Pick person in that Category.  Ensure that there are no dups
+            imageFolder = await MakeTrainingFolder(possibleNames);
+
+            // set variables to collect the n images over a number of seconds
+            imageNeededCount = NumberOfNeededImages;
+
+            // Update with screen with instructions
+            await ShowMessage("Please stay in the cameras view for the next 20 seconds....", 2000);
+        }
+
+        private async Task<StorageFolder> MakeTrainingFolder(string[] possibleNames)
+        {
+            var random = new Random();
+
+            // Wherever we are allowed to store folders.
+            var pictureLibrary = KnownFolders.PicturesLibrary;
+
+            var heroOrVillanFolder = await pictureLibrary.CreateFolderAsync("Supers", CreationCollisionOption.OpenIfExists);
+
+            StorageFolder newFolder = null;
+            while(newFolder == null)
+            {
+                var index = random.Next(possibleNames.Length);
+                var proposedName = possibleNames[index];
+
+                try
+                {
+                    newFolder = await heroOrVillanFolder.CreateFolderAsync(proposedName, CreationCollisionOption.FailIfExists);
+                }
+                catch (Exception ex)
+                {
+                    var eating = ex;
+                    // for now....
+                }
+            }
+
+            return newFolder;
+        }
+
+        private string[] PickHeroOrVillanNamePool()
+        {
+            var random = new Random();
+
+            if (random.Next(2) == 0)
+                return GroupData.Heros;
+            else
+                return GroupData.Villans;
+        }
+
+        private void PageNo_Click(object sender, RoutedEventArgs e)
+        {
+            var test = "";
+        }
+
+
+        private async void TrainMe_Click(object sender, RoutedEventArgs e)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                // Enable the Train feature and disable the other buttons
+                TrainMe.Visibility = Visibility.Visible;
+                TrainMe.Content = "Processing";
+            });
+
+            TrainingStatus trainingStatus = null;
+            try
+            {
+
+
+                while (true)
+                {
+                    trainingStatus = await faceServiceClient.GetPersonGroupTrainingStatusAsync(HeroOrVillanPersonGroup.PersonGroupId);
+
+                    if (trainingStatus.Status != Microsoft.ProjectOxford.Face.Contract.Status.Running)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(1000);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                var eatId = ex;
+                // for now
+            }
+
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                // Enable the Train feature and disable the other buttons
+                TrainMe.Visibility = Visibility.Visible;
+                TrainMe.Content = "Train";
+            });
         }
     }
 }

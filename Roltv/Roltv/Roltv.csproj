@@ -141,6 +141,12 @@
       <Version>1.4.0</Version>
     </PackageReference>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ServiceHelpers\ServiceHelpers.csproj">
+      <Project>{26923009-2033-49ff-ab5a-e5525ea5fc1f}</Project>
+      <Name>ServiceHelpers</Name>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

@@ -31,7 +31,7 @@
         
         <!--<Button Content="Button" Grid.Column="1" HorizontalAlignment="Left" Margin="116,322,0,0" VerticalAlignment="Top"/>-->
         <Button Content="Yes" Grid.Row="0" Grid.Column="1" x:Name="PageYes" Margin="5"
-                        IsHitTestVisible="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="64"/>
+                        IsHitTestVisible="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="64" Click="PageYes_Click"/>
 
         <Button Content="No" Grid.Row="1" Grid.Column="1" x:Name="PageNo" Margin="5"
                         IsHitTestVisible="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="64"/>

@@ -1,6 +1,6 @@
 ﻿namespace ServiceHelpers
 {
-    class GroupData
+    public class GroupData
     {
         public static string HeroVillanGroupName = "HeroOrVillian";
 

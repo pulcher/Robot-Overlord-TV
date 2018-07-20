@@ -75,7 +75,8 @@ namespace Roltv
         {
             faceServiceClient = new FaceServiceClient("64424d4e9d114614a4c46fe258b272a7", "https://southcentralus.api.cognitive.microsoft.com/face/v1.0");
 
-            // See https://docs.microsoft.com/en-us/azure/cognitive-services/face/glossary#a for the current list of supported options.
+            // See https://docs.microsoft.com/en-us/azure/cognitive-services/face/glossary#a
+            // for the current list of supported options.
             requiredFaceAttributes = new FaceAttributeType[]
             {
                 FaceAttributeType.Age,
@@ -365,6 +366,9 @@ namespace Roltv
 
                 foreach (var group in personGroups)
                 {
+                    if (group.Name == GroupData.HeroVillanGroupName)
+                        continue;
+
                     var results = await faceServiceClient.IdentifyAsync(group.PersonGroupId, foundFaces);
 
                     foreach (var processedResult in results)
